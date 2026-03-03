@@ -1,0 +1,16 @@
+# 忽略名为 train 和 test 的文件夹（及其所有内容）
+/train/
+/test/
+
+# 或者，如果你只想忽略图片格式，但保留文件夹结构，可以用：
+# *.jpg
+# *.jpeg
+# *.png
+# *.gif
+# *.bmp
+
+# 其他常见的需要忽略的文件
+*.pyc
+__pycache__/
+.DS_Store
+Thumbs.db

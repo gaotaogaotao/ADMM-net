@@ -15,3 +15,6 @@ d:PATH
     └── GOPR0384_11_00/
         ├── blur/
         └── sharp/
+
+# 输入指令操作
+python train.py --root_dir . --model_type admm --epochs 200 --batch_size 8

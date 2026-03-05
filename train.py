@@ -13,6 +13,7 @@ from utils import (
     CombinedLoss, 
     CharbonnierLoss,
     calculate_psnr, 
+    calculate_ssim, 
     save_checkpoint, 
     load_checkpoint,
     AverageMeter, 
@@ -60,6 +61,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch, args
     model.train()
     losses = AverageMeter()
     psnrs = AverageMeter()
+    ssims = AverageMeter() # 增加 ssim 指标
     
     pbar = tqdm(dataloader, desc=f'Epoch {epoch}')
     
@@ -78,27 +80,32 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch, args
         
         with torch.no_grad():
             psnr = calculate_psnr(output, sharp)
+            ssim = calculate_ssim(output, sharp) # 计算 ssim
         
         losses.update(loss.item(), blur.size(0))
         psnrs.update(psnr, blur.size(0))
+        ssims.update(ssim, blur.size(0)) # 更新 ssim 指标
         
         pbar.set_postfix({
             'loss': f'{losses.avg:.4f}',
             'psnr': f'{psnrs.avg:.2f}dB',
+            'ssim': f'{ssims.avg:.4f}', # 增加 ssim 指标
             'lr': f'{get_lr(optimizer):.6f}'
         })
         
         global_step = epoch * len(dataloader) + idx
         writer.add_scalar('train/loss', loss.item(), global_step)
         writer.add_scalar('train/psnr', psnr, global_step)
+        writer.add_scalar('train/ssim', ssim, global_step) # 增加 ssim 指标
     
-    return losses.avg, psnrs.avg
+    return losses.avg, psnrs.avg, ssims.avg # 返回 ssim 指标
 
 
 def validate(model, dataloader, criterion, device, epoch, args, writer):
     model.eval()
     losses = AverageMeter()
     psnrs = AverageMeter()
+    ssims = AverageMeter() # 增加 ssim 指标
     
     with torch.no_grad():
         for batch in tqdm(dataloader, desc='Validation'):
@@ -109,16 +116,19 @@ def validate(model, dataloader, criterion, device, epoch, args, writer):
             
             loss = criterion(output, sharp)
             psnr = calculate_psnr(output, sharp)
+            ssim = calculate_ssim(output, sharp) # 计算 ssim
             
             losses.update(loss.item(), blur.size(0))
             psnrs.update(psnr, blur.size(0))
+            ssims.update(ssim, blur.size(0)) # 更新 ssim 指标
     
     writer.add_scalar('val/loss', losses.avg, epoch)
     writer.add_scalar('val/psnr', psnrs.avg, epoch)
+    writer.add_scalar('val/ssim', ssims.avg, epoch) # 增加 ssim 指标
     
-    print(f'Validation - Loss: {losses.avg:.4f}, PSNR: {psnrs.avg:.2f}dB')
+    print(f'Validation - Loss: {losses.avg:.4f}, PSNR: {psnrs.avg:.2f}dB, SSIM: {ssims.avg:.4f}')
     
-    return losses.avg, psnrs.avg
+    return losses.avg, psnrs.avg, ssims.avg # 返回 ssim 指标
 
 
 def main():
@@ -180,15 +190,15 @@ def main():
             args.decay_epochs, args.decay_rate
         )
         
-        train_loss, train_psnr = train_one_epoch(
+        train_loss, train_psnr, train_ssim = train_one_epoch(
             model, train_loader, criterion, optimizer,
             device, epoch, args, writer
         )
         
-        print(f'Epoch {epoch} - Train Loss: {train_loss:.4f}, Train PSNR: {train_psnr:.2f}dB')
+        print(f'Epoch {epoch} - Train Loss: {train_loss:.4f}, Train PSNR: {train_psnr:.2f}dB, Train SSIM: {train_ssim:.4f}')
         
         if (epoch + 1) % 5 == 0 or epoch == args.epochs - 1:
-            val_loss, val_psnr = validate(
+            val_loss, val_psnr, val_ssim = validate(
                 model, val_loader, criterion,
                 device, epoch, args, writer
             )
@@ -199,7 +209,7 @@ def main():
                     model, optimizer, epoch, val_loss,
                     os.path.join(args.save_dir, 'best_model.pth')
                 )
-                print(f'Saved best model with PSNR: {best_psnr:.2f}dB')
+                print(f'Saved best model with PSNR: {best_psnr:.2f}dB, SSIM: {val_ssim:.4f}')
         
         if (epoch + 1) % 10 == 0:
             save_checkpoint(
